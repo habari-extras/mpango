@@ -134,6 +134,9 @@ class Project
 			case 'description':
 				$this->description = (string) $this->xml->description;
 				return $this->description;
+			case 'version':
+				$this->version = (string) $this->xml->version;
+				return $this->version;
 			case 'authors':
 				$authors = array();
 				foreach( $this->xml->author as $author) {
