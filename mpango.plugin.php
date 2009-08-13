@@ -74,8 +74,13 @@ class Mpango extends Plugin
 			$options = $form->publish_controls->append('fieldset', 'options', _t('Project'));
 			
 			$options->append('text', 'repository', 'null:null', _t('Repository URL'), 'tabcontrol_text');
-			$options->repository->value = $post->project->repository->base;
+			if($post->project->repository != null) {
+				$options->repository->value = $post->project->repository->base;
+			}
 			
+			$options->append('text', 'commands', 'null:null', _t('Commands URL'), 'tabcontrol_text');
+			$options->commands->value = $post->project->commands_url;
+						
 		}
 	}
 	
@@ -89,6 +94,7 @@ class Mpango extends Plugin
 			// $this->action_form_publish( $form, $post, 'create');
 			
 			$post->info->repository = $form->repository->value;
+			$post->info->commands_url = $form->commands->value;
 		
 		}
 	}
@@ -101,7 +107,21 @@ class Mpango extends Plugin
 			return new Project( $post );
 		}
 		else {
-			return $permalink;
+			return $project;
+		}
+	}
+	
+	/**
+	 * Add needed elements to header
+	 *
+	 * 
+	 **/
+	public function action_template_header($theme)
+	{
+		if( $theme->request->display_post && $theme->post->project != null ) {
+			if( $theme->post->project->type == 'ubiquity' ) {
+				echo '<link rel="commands" href="' . $theme->post->project->commands_url . '" name="Ubiquity Commands" />';
+			}
 		}
 	}
 	
@@ -120,16 +140,46 @@ class Project
 	
 	public function __get( $property ) {
 		switch ( $property ) {
+			case 'type':
+				if( $this->xml != null ) {
+					$this->type = (string) $this->xml['type'];
+				}
+				elseif( $this->commands_url != null )
+					$this->type = 'ubiquity';
+				else {
+					$this->type = 'generic';
+				}
+				return $this->type;
 			case 'xml_url':
-				$this->xml_url = $this->repository->trunk . $this->post->slug . '.plugin.xml';
-				return $this->xml_url;
-			case 'repository':
-				$repository = new stdClass;
+				if( $this->repository == null ) {
+					$this->xml_url = null;
+				}
+				else {
+					$this->xml_url = $this->repository->trunk . $this->post->slug . '.plugin.xml';
+				}
 				
-				$repository->base = $this->post->info->repository;
-				$repository->trunk = $repository->base . 'trunk/';
-			
-				$this->repository = $repository;
+				return $this->xml_url;
+			case 'commands_url':
+				if( $this->post->info->commands_url == null ) {
+					$this->commands_url = null;
+				}
+				else {
+					$this->commands_url = $this->post->info->commands_url;
+				}
+				return $this->commands_url;
+			case 'repository':
+				if($this->post->info->repository == (null || false || '')) {
+					$this->repository = null;
+				}
+				else {
+					$repository = new stdClass;
+
+					$repository->base = $this->post->info->repository;
+					$repository->trunk = $repository->base . 'trunk/';
+
+					$this->repository = $repository;
+				}
+				
 				return $this->repository;
 			case 'description':
 				$this->description = (string) $this->xml->description;
@@ -148,8 +198,23 @@ class Project
 								
 				$this->authors = $authors;
 				return $this->authors;
+			case 'help':
+				if( isset($this->xml->help) ) {
+					foreach($this->xml->help->value as $help) {
+						$this->help = (string) $help;
+					}
+				}
+				else {
+					$this->help = NULL;
+				}
+				return $this->help;
 			case 'xml':
-				$this->xml = simplexml_load_file( $this->xml_url );
+				if( $this->xml_url == null ) {
+					$this->xml = null;
+				} else {
+					$this->xml = simplexml_load_file( $this->xml_url );
+				}
+				
 				return $this->xml;
 		}
 	}
