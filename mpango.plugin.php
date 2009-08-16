@@ -187,6 +187,12 @@ class Project
 			case 'version':
 				$this->version = (string) $this->xml->version;
 				return $this->version;
+			case 'license':
+				$this->license = array(
+					'url' => (string) $this->xml->license['url'],
+					'name' => (string) $this->xml->license
+				);
+				return $this->license;
 			case 'authors':
 				$authors = array();
 				foreach( $this->xml->author as $author) {
@@ -212,19 +218,64 @@ class Project
 				if( $this->xml_url == null ) {
 					$this->xml = null;
 				} else {
-					$key = 'mpango_plugin_xml_' . $this->post->slug;
-					if( Cache::has( $key ) ) {
-						$raw = Cache::get( $key );
-						$this->xml = new SimpleXMLElement( $raw );
-					}
-					else {
-						$this->xml = simplexml_load_file( $this->xml_url );
-						Cache::set( $key, $this->xml->asXML() );
-					}
+					$this->xml = $this->cached_xml( $this->xml_url, 'mpango_plugin_xml_' . $this->post->slug );
 				}
 				
 				return $this->xml;
+				
+			case 'forum':
+				if( $this->type == 'plugin' ) {
+					$this->forum = $this->get_forum();
+					return $this->forum;
+				}
+				else {
+					return NULL;
+				}
 		}
+	}
+	
+	
+	public function get_forum() {		
+		$forum = new stdClass();
+		
+		$forum->new = 'https://habariproject.org/forums/post.php?CategoryID=1';
+		$forum->tag = $this->post->slug;
+		$forum->url = 'https://habariproject.org/forums/search.php?PostBackAction=Search&Type=Topics&Tag=' . $forum->tag;
+		$forum->atom = 'https://habariproject.org/forums/search.php?PostBackAction=Search&Type=Topics&Page=1&Feed=ATOM&Tag=' . $forum->tag . '&FeedTitle=Search+Results+Feed+%28Tag%3A+ ' . $forum->tag . '%29';
+		
+		$forum->xml = $this->cached_xml( $forum->atom, NULL, FALSE );
+		
+		$forum->entries = array();
+		
+		foreach( $forum->xml->entry as $element ) {
+			$entry = new stdClass();
+			
+			$entry->title = (string) $element->title;
+			$entry->url = (string) $element->link['href'];
+			$entry->date = HabariDateTime::date_create( (string) $element->updated );
+			$entry->summary = Format::summarize( (string) $element->summary, 10 ) ;
+			
+			$forum->entries[] = $entry;
+		}
+		
+		return $forum;
+	}
+	
+	private function cached_xml( $url, $key = NULL, $force = FALSE ) {
+		if( $key == null ) {
+			$key = Utils::md5( $url );
+		}
+				
+		if( Cache::has( $key ) && $force == FALSE ) {
+			$raw = Cache::get( $key );
+			$xml = new SimpleXMLElement( $raw );
+		}
+		else {
+			$xml = simplexml_load_file( $url );
+			Cache::set( $key, $xml->asXML() );
+		}
+		
+		return $xml;
 	}
 	
 }
