@@ -212,7 +212,15 @@ class Project
 				if( $this->xml_url == null ) {
 					$this->xml = null;
 				} else {
-					$this->xml = simplexml_load_file( $this->xml_url );
+					$key = 'mpango_plugin_xml_' . $this->post->slug;
+					if( Cache::has( $key ) ) {
+						$raw = Cache::get( $key );
+						$this->xml = new SimpleXMLElement( $raw );
+					}
+					else {
+						$this->xml = simplexml_load_file( $this->xml_url );
+						Cache::set( $key, $this->xml->asXML() );
+					}
 				}
 				
 				return $this->xml;
