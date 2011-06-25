@@ -235,7 +235,10 @@ class Project
 	}
 	
 	
-	public function get_forum() {		
+	public function get_forum() {
+		// Functionality discontinued
+		return NULL;
+				
 		$forum = new stdClass();
 		
 		$forum->new = 'https://habariproject.org/forums/post.php?CategoryID=1';
