@@ -3,6 +3,8 @@
 class Mpango extends Plugin
 {
 	
+	private $projects = array();
+	
 	public function action_update_check()
 	{
 		Update::add( $this->info->name, 'e283ba9d-d16d-4932-b9dd-0117e84a3ba8', $this->info->version );
@@ -104,7 +106,7 @@ class Mpango extends Plugin
 	 **/
 	public function filter_post_project($project, $post) {
 		if($post->content_type == Post::type('project')) {
-			return new Project( $post );
+			return $this->get_project( $post );
 		}
 		else {
 			return $project;
@@ -125,10 +127,172 @@ class Mpango extends Plugin
 		}
 	}
 	
+	/**
+	 * Gets or creates the Project object 
+	 **/
+	public function get_project( $post )
+	{
+		$project = new Project( $post );
+		
+		if( $post->info->repository != '' )
+		{
+			$repo = parse_url( $post->info->repository );
+			if( $repo['host'] == 'github.com' )
+			{
+				$project = new GitHubProject( $post, $post->info->repository );
+				
+				if( $project->get_contents( 'theme.xml') )
+				{
+					$project = new HabariGitHubProject( $post, $post->info->repository, 'theme' );
+					Utils::debug( $project->get_contents( 'theme.xml') );
+				}
+				elseif( $project->get_contents( 'theme.xml') )
+				{
+					$project = new HabariGitHubProject( $post, $post->info->repository, 'theme' );
+				}
+				
+								
+			}
+		}
+		
+		return $project;
+	}
+	
 }
 
 /**
-* Class for projects, is a subclass of post
+* Class for GitHubProjects
+*/
+class GitHubProject extends Project
+{
+	var $api = 'https://api.github.com';
+	var $url;
+	
+	function __construct( $post, $url )
+	{
+		$this->post = $post;
+		$this->url = parse_url( $url );
+		
+		$path = pathinfo( $this->url['path'] );
+		$this->user = trim( $path['dirname'], '/');
+		$this->repository = $path['basename'];
+				
+	}
+	
+	public function __get( $property )
+	{
+		switch( $property )
+		{	
+			case 'repo':
+				return $this->repository;
+			
+			default:
+				return parent::__get( $property );
+		}
+	}
+	
+	private function call( $method )
+	{
+		$contents = RemoteRequest::get_contents( $this->api . '/' . $method);
+				
+		if( !$contents )
+		{
+			return false;
+		}
+		
+		$parsed = json_decode( $contents );
+		
+		return $parsed;
+	}
+	
+	public function get_contents( $path )
+	{
+		$path = 'repos/' . $this->user . '/' . $this->repo . '/contents/' . $path;
+		
+		$response = $this->call( $path );
+		
+		
+		if( !$response )
+		{
+			return false;
+		}
+		
+		$contents = $response->content;
+		$contents = base64_decode( $contents );
+				
+		return 'bob';
+	}
+}
+
+
+/**
+* Class for HabariGitHubProjects
+*/
+class HabariGitHubProject extends GitHubProject
+{
+	function __construct( $post, $url, $type )
+	{
+		parent::__construct( $post, $url );
+		
+		$this->type = $type;
+		
+		Utils::debug( $this );
+		
+		
+		// if( $type == 'theme' )
+		// {
+		// 	$xmlpath = 'theme.xml';
+		// }
+		// 
+		// // $this->xml = simplexml_load_string( $this->get_contents( $xmlpath ) );
+		// 
+		// Utils::debug( $this->cal( 'theme.xml' ) );
+		
+	}
+	
+	public function __get( $property ) {
+		switch ( $property ) {
+			case 'description':
+				$this->description = (string) $this->xml->description;
+				return $this->description;
+			case 'version':
+				$this->version = (string) $this->xml->version;
+				return $this->version;
+			case 'license':
+				$this->license = array(
+					'url' => (string) $this->xml->license['url'],
+					'name' => (string) $this->xml->license
+				);
+				return $this->license;
+			case 'authors':
+				$authors = array();
+				foreach( $this->xml->author as $author) {
+					$authors[] = array(
+						'url' => (string) $author['url'],
+						'name' => (string) $author
+					);
+				}
+								
+				$this->authors = $authors;
+				return $this->authors;
+			case 'help':
+				if( isset($this->xml->help) ) {
+					foreach($this->xml->help->value as $help) {
+						$this->help = (string) $help;
+					}
+				}
+				else {
+					$this->help = NULL;
+				}
+				return $this->help;
+				
+		}
+	}
+	
+}
+
+/**
+* Class for projects
 */
 class Project
 {
@@ -223,62 +387,7 @@ class Project
 				
 				return $this->xml;
 				
-			case 'forum':
-				if( $this->type == 'plugin' ) {
-					$this->forum = $this->get_forum();
-					return $this->forum;
-				}
-				else {
-					return NULL;
-				}
 		}
-	}
-	
-	
-	public function get_forum() {
-		// Functionality discontinued
-		return NULL;
-				
-		$forum = new stdClass();
-		
-		$forum->new = 'https://habariproject.org/forums/post.php?CategoryID=1';
-		$forum->tag = $this->post->slug;
-		$forum->url = 'https://habariproject.org/forums/search.php?PostBackAction=Search&Type=Topics&Tag=' . $forum->tag;
-		$forum->atom = 'https://habariproject.org/forums/search.php?PostBackAction=Search&Type=Topics&Page=1&Feed=ATOM&Tag=' . $forum->tag . '&FeedTitle=Search+Results+Feed+%28Tag%3A+ ' . $forum->tag . '%29';
-		
-		$forum->xml = $this->cached_xml( $forum->atom, NULL, FALSE );
-		
-		$forum->entries = array();
-		
-		foreach( $forum->xml->entry as $element ) {
-			$entry = new stdClass();
-			
-			$entry->title = (string) $element->title;
-			$entry->url = (string) $element->link['href'];
-			$entry->date = HabariDateTime::date_create( (string) $element->updated );
-			$entry->summary = Format::summarize( (string) $element->summary, 10 ) ;
-			
-			$forum->entries[] = $entry;
-		}
-		
-		return $forum;
-	}
-	
-	private function cached_xml( $url, $key = NULL, $force = FALSE ) {
-		if( $key == null ) {
-			$key = Utils::md5( $url );
-		}
-				
-		if( Cache::has( $key ) && $force == FALSE ) {
-			$raw = Cache::get( $key );
-			$xml = new SimpleXMLElement( $raw );
-		}
-		else {
-			$xml = simplexml_load_file( $url );
-			Cache::set( $key, $xml->asXML() );
-		}
-		
-		return $xml;
 	}
 	
 }
