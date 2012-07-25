@@ -76,9 +76,6 @@ class Mpango extends Plugin
 			$options = $form->publish_controls->append('fieldset', 'options', _t('Project'));
 			
 			$options->append('text', 'repository', 'null:null', _t('Repository URL'), 'tabcontrol_text');
-			if($post->project->repository != null) {
-				$options->repository->value = $post->project->repository->base;
-			}
 			
 			$options->append('text', 'commands', 'null:null', _t('Commands URL'), 'tabcontrol_text');
 			$options->commands->value = $post->project->commands_url;
