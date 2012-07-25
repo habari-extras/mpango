@@ -144,11 +144,10 @@ class Mpango extends Plugin
 				if( $project->get_contents( 'theme.xml') )
 				{
 					$project = new HabariGitHubProject( $post, $post->info->repository, 'theme' );
-					Utils::debug( $project->get_contents( 'theme.xml') );
 				}
-				elseif( $project->get_contents( 'theme.xml') )
+				elseif( $project->get_contents( $post->slug . '.plugin.xml') )
 				{
-					$project = new HabariGitHubProject( $post, $post->info->repository, 'theme' );
+					$project = new HabariGitHubProject( $post, $post->info->repository, 'plugin' );
 				}
 				
 								
@@ -165,15 +164,17 @@ class Mpango extends Plugin
 */
 class GitHubProject extends Project
 {
-	var $api = 'https://api.github.com';
-	var $url;
-	
+	private $api = 'https://api.github.com';
+	public $url;
+	private $repodetails;
+		
 	function __construct( $post, $url )
 	{
 		$this->post = $post;
 		$this->url = parse_url( $url );
 		
 		$path = pathinfo( $this->url['path'] );
+				
 		$this->user = trim( $path['dirname'], '/');
 		$this->repository = $path['basename'];
 				
@@ -182,18 +183,79 @@ class GitHubProject extends Project
 	public function __get( $property )
 	{
 		switch( $property )
-		{	
+		{
+			case 'host':
+				return 'github';
+			case 'tags':
+				$response = $this->call( 'repos/' . $this->user . '/' . $this->repo . '/git/refs/tags' );
+								
+				$tags = array();
+				
+				foreach( $response as $bt )
+				{					
+					
+					$tag = $this->call( 'repos/' . $this->user . '/' . $this->repo . '/git/tags/' . $bt->object->sha );
+					
+					$tag->basic = $bt;
+					
+					$tag->date = HabariDateTime::date_create( $tag->tagger->date );
+					$tag->zipball_url = 'https://github.com/' . $this->user . '/scientist/zipball/' . $tag->tag;
+										
+					$tags[$tag->tag] = $tag;
+				}
+				
+				return array_reverse( $tags );
+				
+				break;
+			
+			case 'new_issue_url':
+				return 'http://github.com/' . $this->user . '/' . $this->repo . '/issues/new';
+			
+			case 'zipball_url':
+				return 'http://github.com/' . $this->user . '/' . $this->repo . '/zipball/master';
+			
 			case 'repo':
 				return $this->repository;
+				break; // will never be executed
+			
+			case 'github':
+				return $this->html_url;
+				return;
+			
+			case 'cloneurl':
+				return $this->clone_url;
+			
+			case 'pushdate':
+				return HabariDateTime::date_create( $this->pushed_ad );
+			
+			case 'pushed_at':
+			case 'html_url':
+			case 'clone_url':
+				if( !isset( $this->repodetails ) )
+				{
+					$details = $this->call( 'repos/' . $this->user . '/' . $this->repo );					
+					$this->repodetails = $details;
+					return $details->{$property};
+				}
+				else
+				{
+					return $this->repodetails->{$property};
+				}
+				break;
 			
 			default:
 				return parent::__get( $property );
 		}
 	}
 	
-	private function call( $method )
+	private function call( $method, $cache = true )
 	{
-		$contents = RemoteRequest::get_contents( $this->api . '/' . $method);
+		if( $cache && Cache::has( array( 'mpango_githubapi', md5( $method ) ) ) )
+		{
+			return Cache::get( array( 'mpango_githubapi', md5( $method ) ) );
+		}
+		
+		$contents = RemoteRequest::get_contents( $this->api . '/' . $method);		
 				
 		if( !$contents )
 		{
@@ -202,15 +264,16 @@ class GitHubProject extends Project
 		
 		$parsed = json_decode( $contents );
 		
+		Cache::set( array( 'mpango_githubapi', md5( $method ) ), $parsed );
+				
 		return $parsed;
 	}
 	
 	public function get_contents( $path )
-	{
+	{		
 		$path = 'repos/' . $this->user . '/' . $this->repo . '/contents/' . $path;
 		
 		$response = $this->call( $path );
-		
 		
 		if( !$response )
 		{
@@ -220,7 +283,7 @@ class GitHubProject extends Project
 		$contents = $response->content;
 		$contents = base64_decode( $contents );
 				
-		return 'bob';
+		return $contents;
 	}
 }
 
@@ -230,28 +293,31 @@ class GitHubProject extends Project
 */
 class HabariGitHubProject extends GitHubProject
 {
+	private $xml;
+		
 	function __construct( $post, $url, $type )
 	{
 		parent::__construct( $post, $url );
 		
 		$this->type = $type;
-		
-		Utils::debug( $this );
-		
-		
-		// if( $type == 'theme' )
-		// {
-		// 	$xmlpath = 'theme.xml';
-		// }
-		// 
-		// // $this->xml = simplexml_load_string( $this->get_contents( $xmlpath ) );
-		// 
-		// Utils::debug( $this->cal( 'theme.xml' ) );
-		
+				
+		if( $type == 'theme' )
+		{
+			$xmlpath = 'theme.xml';
+		}
+		else
+		{
+			$xmlpath = $this->post->slug . '.plugin.xml';
+		}
+
+		$this->xml = simplexml_load_string( $this->get_contents( $xmlpath ) );
+			
 	}
 	
 	public function __get( $property ) {
 		switch ( $property ) {
+			case 'platform':
+				return 'habari';
 			case 'description':
 				$this->description = (string) $this->xml->description;
 				return $this->description;
@@ -285,7 +351,18 @@ class HabariGitHubProject extends GitHubProject
 					$this->help = NULL;
 				}
 				return $this->help;
+			case 'screenshot_url':
+				if( $this->type == 'theme')
+				{
+					return 'https://github.com/' . $this->user . '/' . $this->repo . '/raw/master/screenshot.jpg';
+				}
+				else
+				{
+					return null;
+				}
 				
+			default:
+				return parent::__get( $property );
 		}
 	}
 	
@@ -304,6 +381,8 @@ class Project
 	
 	public function __get( $property ) {
 		switch ( $property ) {
+			case 'host':
+				return false;
 			case 'type':
 				if( $this->xml != null ) {
 					$this->type = (string) $this->xml['type'];
