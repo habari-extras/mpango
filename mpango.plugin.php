@@ -76,6 +76,7 @@ class Mpango extends Plugin
 			$options = $form->publish_controls->append('fieldset', 'options', _t('Project'));
 			
 			$options->append('text', 'repository', 'null:null', _t('Repository URL'), 'tabcontrol_text');
+			$options->repository->value = $post->info->repository;
 			
 			$options->append('text', 'commands', 'null:null', _t('Commands URL'), 'tabcontrol_text');
 			$options->commands->value = $post->project->commands_url;
@@ -187,18 +188,21 @@ class GitHubProject extends Project
 				$response = $this->call( 'repos/' . $this->user . '/' . $this->repo . '/git/refs/tags' );
 								
 				$tags = array();
-				
-				foreach( $response as $bt )
-				{					
-					
-					$tag = $this->call( 'repos/' . $this->user . '/' . $this->repo . '/git/tags/' . $bt->object->sha );
-					
-					$tag->basic = $bt;
-					
-					$tag->date = HabariDateTime::date_create( $tag->tagger->date );
-					$tag->zipball_url = 'https://github.com/' . $this->user . '/scientist/zipball/' . $tag->tag;
-										
-					$tags[$tag->tag] = $tag;
+
+				if( is_array( $response ) )
+				{
+					foreach( $response as $bt )
+					{					
+
+						$tag = $this->call( 'repos/' . $this->user . '/' . $this->repo . '/git/tags/' . $bt->object->sha );
+
+						$tag->basic = $bt;
+
+						$tag->date = HabariDateTime::date_create( $tag->tagger->date );
+						$tag->zipball_url = 'https://github.com/' . $this->user . '/scientist/zipball/' . $tag->tag;
+
+						$tags[$tag->tag] = $tag;
+					}
 				}
 				
 				return array_reverse( $tags );
