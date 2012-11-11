@@ -199,7 +199,7 @@ class GitHubProject extends Project
 						$tag->basic = $bt;
 
 						$tag->date = HabariDateTime::date_create( $tag->tagger->date );
-						$tag->zipball_url = 'https://github.com/' . $this->user . '/scientist/zipball/' . $tag->tag;
+						$tag->zipball_url = 'https://github.com/' . $this->user . '/' . $this->repo . '/zipball/' . $tag->tag;
 
 						$tags[$tag->tag] = $tag;
 					}
