@@ -3,7 +3,7 @@
 	<name>Mpango</name> 
 	<license url="http://www.apache.org/licenses/LICENSE-2.0.html">Apache Software License 2.0</license> 
 	<author url="http://morgante.net/">Morgante Pell</author> 
-	<version>0.3</version> 
+	<version>0.4</version> 
 	<url>http://lab.morgante.net/mpango</url> 
 	<description><![CDATA[Mpango allows the display of project pages for development projects, such as plugins and themes.]]></description> 
 	<copyright>2009</copyright>
