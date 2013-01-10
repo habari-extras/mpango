@@ -5,6 +5,11 @@ class Mpango extends Plugin
 	
 	private static $projects = array();
 	
+	public function action_init()
+	{
+		$this->add_template('tabcontrol_textmulti', dirname(__FILE__) . '/tabcontrol_textmulti.php');
+	}
+		
 	public function action_update_check()
 	{
 		Update::add( $this->info->name, 'e283ba9d-d16d-4932-b9dd-0117e84a3ba8', $this->info->version );
@@ -89,6 +94,11 @@ class Mpango extends Plugin
 			
 			$options->append('text', 'commands', 'null:null', _t('Commands URL'), 'tabcontrol_text');
 			$options->commands->value = $post->project->commands_url;
+			
+			$options->append('textmulti', 'images', 'null:null', _t('Images'), 'tabcontrol_textmulti');
+			$options->images->class[] = 'container';
+			$options->images->class[] = 'transparent';
+			$options->images->value = $post->info->images;
 						
 		}
 	}
@@ -104,6 +114,7 @@ class Mpango extends Plugin
 			
 			$post->info->repository = $form->repository->value;
 			$post->info->commands_url = $form->commands->value;
+			$post->info->images = $form->images->value;
 		
 		}
 	}
