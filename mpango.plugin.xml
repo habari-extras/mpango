@@ -6,5 +6,12 @@
 	<version>0.2</version> 
 	<url>http://lab.morgante.net/mpango</url> 
 	<description><![CDATA[Mpango allows the display of project pages for development projects, such as plugins and themes.]]></description> 
-	<copyright>2009</copyright> 
+	<copyright>2009</copyright>
+	
+	<help>
+	  <value><![CDATA[
+	     <p>If you&apos;re having errors, it might be due to rate issues. To fix them, register for an application <a href="https://github.com/settings/applications/new">on GitHub</a> and provide the client ID and secret in the config.</p>
+	  ]]></value>
+	</help>
+	
 </pluggable> 

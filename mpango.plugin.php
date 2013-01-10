@@ -10,6 +10,15 @@ class Mpango extends Plugin
 		Update::add( $this->info->name, 'e283ba9d-d16d-4932-b9dd-0117e84a3ba8', $this->info->version );
 	}
 	
+	public function configure()
+	{
+		$ui = new FormUI( 'mpango_config' );
+		$ui->append( 'text', 'github_id', 'mpango__github_id', _t('GitHub ID (optional)') );
+		$ui->append( 'text', 'github_secret', 'mpango__github_secret', _t('GitHub Secret (optional)') );
+		$ui->append('submit', 'save', _t('Save'));
+		return $ui;
+	}
+	
 	/**
 	 * Set up needed stuff for the plugin
 	 **/
@@ -145,7 +154,7 @@ class Mpango extends Plugin
 				$project = new GitHubProject( $post, $post->info->repository );
 				
 				$contents = $project->get_contents();
-				
+								
 				foreach( $contents as $file )
 				{
 					if( $file->name == 'theme.xml' )
@@ -366,9 +375,16 @@ class GitHubProject extends Project
 		{
 			return Cache::get( array( 'mpango_githubapi', md5( $method ) ) );
 		}
+		
+		$url = $this->api . '/' . $method;
+		
+		if( Options::get( 'mpango__github_id' ) != null )
+		{
+			$url.= '?client_id=' . Options::get( 'mpango__github_id' ) . '&client_secret=' . Options::get( 'mpango__github_secret' );
+		}
 								
-		$contents = RemoteRequest::get_contents( $this->api . '/' . $method);		
-									
+		$contents = RemoteRequest::get_contents( $url );		
+										
 		if( !$contents )
 		{						
 			return false;
