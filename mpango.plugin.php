@@ -250,7 +250,10 @@ class Project
 				}
 				return $this->help;
 			default:
-				return $this->{$property};
+				if( isset( $this->{$property} ) )
+				{
+					return $this->{$property};
+				}
 		}
 	}
 	
@@ -356,7 +359,7 @@ class GitHubProject extends Project
 		}
 		
 		$contents = RemoteRequest::get_contents( $this->api . '/' . $method);		
-				
+						
 		if( !$contents )
 		{
 			return false;
