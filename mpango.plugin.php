@@ -139,6 +139,8 @@ class Mpango extends Plugin
 			{
 				$project = new GitHubProject( $post, $post->info->repository );
 				
+				Utils::debug( $project->get_contents( 'theme.xml') );
+				
 				if( $project->get_contents( 'theme.xml') )
 				{
 					$project = new HabariGitHubProject( $post, $post->info->repository, 'theme' );
@@ -157,217 +159,6 @@ class Mpango extends Plugin
 	
 }
 
-/**
-* Class for GitHubProjects
-*/
-class GitHubProject extends Project
-{
-	private $api = 'https://api.github.com';
-	public $url;
-	private $repodetails;
-		
-	function __construct( $post, $url )
-	{
-		$this->post = $post;
-		$this->url = parse_url( $url );
-		
-		$path = pathinfo( $this->url['path'] );
-				
-		$this->user = trim( $path['dirname'], '/');
-		$this->repository = $path['basename'];
-				
-	}
-	
-	public function __get( $property )
-	{
-		switch( $property )
-		{
-			case 'host':
-				return 'github';
-			case 'tags':
-				$response = $this->call( 'repos/' . $this->user . '/' . $this->repo . '/git/refs/tags' );
-								
-				$tags = array();
-
-				if( is_array( $response ) )
-				{
-					foreach( $response as $bt )
-					{					
-
-						$tag = $this->call( 'repos/' . $this->user . '/' . $this->repo . '/git/tags/' . $bt->object->sha );
-
-						$tag->basic = $bt;
-
-						$tag->date = HabariDateTime::date_create( $tag->tagger->date );
-						$tag->zipball_url = 'https://github.com/' . $this->user . '/' . $this->repo . '/zipball/' . $tag->tag;
-
-						$tags[$tag->tag] = $tag;
-					}
-				}
-				
-				return array_reverse( $tags );
-				
-				break;
-			
-			case 'new_issue_url':
-				return 'http://github.com/' . $this->user . '/' . $this->repo . '/issues/new';
-			
-			case 'zipball_url':
-				return 'http://github.com/' . $this->user . '/' . $this->repo . '/zipball/master';
-			
-			case 'repo':
-				return $this->repository;
-				break; // will never be executed
-			
-			case 'github':
-				return $this->html_url;
-				return;
-			
-			case 'cloneurl':
-				return $this->clone_url;
-			
-			case 'pushdate':
-				return HabariDateTime::date_create( $this->pushed_ad );
-			
-			case 'pushed_at':
-			case 'html_url':
-			case 'clone_url':
-				if( !isset( $this->repodetails ) )
-				{
-					$details = $this->call( 'repos/' . $this->user . '/' . $this->repo );					
-					$this->repodetails = $details;
-					return $details->{$property};
-				}
-				else
-				{
-					return $this->repodetails->{$property};
-				}
-				break;
-			
-			default:
-				return parent::__get( $property );
-		}
-	}
-	
-	private function call( $method, $cache = true )
-	{
-		if( $cache && Cache::has( array( 'mpango_githubapi', md5( $method ) ) ) )
-		{
-			return Cache::get( array( 'mpango_githubapi', md5( $method ) ) );
-		}
-		
-		$contents = RemoteRequest::get_contents( $this->api . '/' . $method);		
-				
-		if( !$contents )
-		{
-			return false;
-		}
-		
-		$parsed = json_decode( $contents );
-		
-		Cache::set( array( 'mpango_githubapi', md5( $method ) ), $parsed );
-				
-		return $parsed;
-	}
-	
-	public function get_contents( $path )
-	{		
-		$path = 'repos/' . $this->user . '/' . $this->repo . '/contents/' . $path;
-		
-		$response = $this->call( $path );
-		
-		if( !$response )
-		{
-			return false;
-		}
-		
-		$contents = $response->content;
-		$contents = base64_decode( $contents );
-				
-		return $contents;
-	}
-}
-
-
-/**
-* Class for HabariGitHubProjects
-*/
-class HabariGitHubProject extends GitHubProject
-{
-	private $xml;
-		
-	function __construct( $post, $url, $type )
-	{
-		parent::__construct( $post, $url );
-		
-		$this->type = $type;
-				
-		if( $type == 'theme' )
-		{
-			$xmlpath = 'theme.xml';
-		}
-		else
-		{
-			$xmlpath = $this->post->slug . '.plugin.xml';
-		}
-
-		$this->xml = simplexml_load_string( $this->get_contents( $xmlpath ) );
-			
-	}
-	
-	public function __get( $property ) {
-		switch ( $property ) {
-			case 'platform':
-				return 'habari';
-			case 'description':
-				$this->description = (string) $this->xml->description;
-				return $this->description;
-			case 'version':
-				$this->version = (string) $this->xml->version;
-				return $this->version;
-			case 'license':
-				$this->license = array(
-					'url' => (string) $this->xml->license['url'],
-					'name' => (string) $this->xml->license
-				);
-				return $this->license;
-			case 'authors':
-				$authors = array();
-				foreach( $this->xml->author as $author) {
-					$authors[] = array(
-						'url' => (string) $author['url'],
-						'name' => (string) $author
-					);
-				}
-								
-				$this->authors = $authors;
-				return $this->authors;
-			case 'help':
-				if( isset($this->xml->help) ) {
-					foreach($this->xml->help->value as $help) {
-						$this->help = (string) $help;
-					}
-				}
-				else {
-					$this->help = NULL;
-				}
-				return $this->help;
-			case 'screenshot_url':
-				if( $this->type == 'theme')
-				{
-					return 'https://github.com/' . $this->user . '/' . $this->repo . '/raw/master/screenshot.jpg';
-				}
-				else
-				{
-					return null;
-				}
-				
-			default:
-				return parent::__get( $property );
-		}
-	}
-	
-}
 
 /**
 * Class for projects
@@ -458,19 +249,238 @@ class Project
 					$this->help = NULL;
 				}
 				return $this->help;
-			case 'xml':
-				if( $this->xml_url == null ) {
-					$this->xml = null;
-				} else {
-					$this->xml = $this->cached_xml( $this->xml_url, 'mpango_plugin_xml_' . $this->post->slug );
-				}
-				
-				return $this->xml;
-				
+			default:
+				return $this->{$property};
 		}
 	}
 	
 }
 
+/**
+* Class for GitHubProjects
+*/
+class GitHubProject extends Project
+{
+	private $api = 'https://api.github.com';
+	public $url;
+	private $repodetails;
+		
+	function __construct( $post, $url )
+	{		
+		$this->post = $post;
+		$this->url = parse_url( $url );
+		
+		$path = pathinfo( $this->url['path'] );
+				
+		$this->user = trim( $path['dirname'], '/');
+		$this->repository = $path['basename'];
+				
+	}
+		
+	public function __get( $property )
+	{
+		switch( $property )
+		{
+			case 'host':
+				return 'github';
+			case 'tags':
+				$response = $this->call( 'repos/' . $this->user . '/' . $this->repo . '/git/refs/tags' );
+								
+				$tags = array();
+
+				if( is_array( $response ) )
+				{
+					foreach( $response as $bt )
+					{					
+
+						$tag = $this->call( 'repos/' . $this->user . '/' . $this->repo . '/git/tags/' . $bt->object->sha );
+
+						$tag->basic = $bt;
+
+						$tag->date = HabariDateTime::date_create( $tag->tagger->date );
+						$tag->zipball_url = 'https://github.com/' . $this->user . '/' . $this->repo . '/zipball/' . $tag->tag;
+
+						$tags[$tag->tag] = $tag;
+					}
+				}
+				
+				return array_reverse( $tags );
+				
+				break;
+			
+			case 'new_issue_url':
+				return 'http://github.com/' . $this->user . '/' . $this->repo . '/issues/new';
+			
+			case 'zipball_url':
+				return 'http://github.com/' . $this->user . '/' . $this->repo . '/zipball/master';
+			
+			case 'repo':
+				return $this->repository;
+				break; // will never be executed
+			
+			case 'github':
+				return $this->html_url;
+				return;
+			
+			case 'cloneurl':
+				return $this->clone_url;
+			
+			case 'pushdate':
+				return HabariDateTime::date_create( $this->pushed_at );
+			
+			case 'pushed_at':
+			case 'html_url':
+			case 'clone_url':
+				if( !isset( $this->repodetails ) )
+				{
+					$details = $this->call( 'repos/' . $this->user . '/' . $this->repo );					
+					$this->repodetails = $details;
+					return $details->{$property};
+				}
+				else
+				{
+					return $this->repodetails->{$property};
+				}
+				break;
+			
+			default:
+				return parent::__get( $property );
+		}
+	}
+	
+	private function call( $method, $cache = true )
+	{
+		if( $cache && Cache::has( array( 'mpango_githubapi', md5( $method ) ) ) )
+		{
+			return Cache::get( array( 'mpango_githubapi', md5( $method ) ) );
+		}
+		
+		$contents = RemoteRequest::get_contents( $this->api . '/' . $method);		
+				
+		if( !$contents )
+		{
+			return false;
+		}
+		
+		$parsed = json_decode( $contents );
+		
+		Cache::set( array( 'mpango_githubapi', md5( $method ) ), $parsed );
+				
+		return $parsed;
+	}
+	
+	public function get_contents( $path )
+	{		
+		$path = 'repos/' . $this->user . '/' . $this->repo . '/contents/' . $path;
+		
+		$response = $this->call( $path );
+				
+		if( !$response )
+		{
+			return false;
+		}
+		
+		$contents = $response->content;
+		$contents = base64_decode( $contents );
+				
+		return $contents;
+	}
+}
+
+
+/**
+* Class for HabariGitHubProjects
+*/
+class HabariGitHubProject extends GitHubProject
+{
+	private $xml;
+		
+	function __construct( $post, $url, $type )
+	{
+		parent::__construct( $post, $url );
+		
+		$this->type = $type;
+		
+		$this->xml();
+				
+	}
+	
+	private function xml()
+	{
+		if( $this->xml != null )
+		{
+			return $this->xml;
+		}
+		
+		if( $this->type == 'theme' )
+		{
+			$xmlpath = 'theme.xml';
+		}
+		else
+		{
+			$xmlpath = $this->post->slug . '.plugin.xml';
+		}
+
+		$this->xml = simplexml_load_string( $this->get_contents( $xmlpath ) );
+		
+		return $this->xml;
+	}
+	
+	public function __get( $property ) {
+		switch ( $property ) {
+			case 'platform':
+				return 'habari';
+			case 'description':
+				$this->description = (string) $this->xml->description;
+				return $this->description;
+			case 'version':
+				$this->version = (string) $this->xml->version;
+				return $this->version;
+			case 'license':
+				$this->license = array(
+					'url' => (string) $this->xml->license['url'],
+					'name' => (string) $this->xml->license
+				);
+				return $this->license;
+			case 'authors':
+				$authors = array();
+				foreach( $this->xml->author as $author) {
+					$authors[] = array(
+						'url' => (string) $author['url'],
+						'name' => (string) $author
+					);
+				}
+								
+				$this->authors = $authors;
+				return $this->authors;
+			case 'help':
+				if( isset($this->xml->help) ) {
+					foreach($this->xml->help->value as $help) {
+						$this->help = (string) $help;
+					}
+				}
+				else {
+					$this->help = NULL;
+				}
+				return $this->help;
+			case 'screenshot_url':
+				if( $this->type == 'theme')
+				{
+					return 'https://github.com/' . $this->user . '/' . $this->repo . '/raw/master/screenshot.jpg';
+				}
+				else
+				{
+					return null;
+				}
+				
+			case 'xml':
+				return $this->xml();
+				
+			default:
+				return parent::__get( $property );
+		}
+	}
+	
+}
 
 ?>
