@@ -139,7 +139,7 @@ class Mpango extends Plugin
 			{
 				$project = new GitHubProject( $post, $post->info->repository );
 				
-				Utils::debug( $project->get_contents( 'theme.xml') );
+				// Utils::debug( $project->get_contents( 'theme.xml') );
 				
 				if( $project->get_contents( 'theme.xml') )
 				{
