@@ -3,7 +3,7 @@
 class Mpango extends Plugin
 {
 	
-	private $projects = array();
+	private static $projects = array();
 	
 	public function action_update_check()
 	{
@@ -104,7 +104,7 @@ class Mpango extends Plugin
 	 **/
 	public function filter_post_project($project, $post) {
 		if($post->content_type == Post::type('project')) {
-			return $this->get_project( $post );
+			return $this->get_project( $post );		
 		}
 		else {
 			return $project;
@@ -130,6 +130,11 @@ class Mpango extends Plugin
 	 **/
 	public function get_project( $post )
 	{
+		if( isset( self::$projects[ $post->slug ] ) )
+		{
+			return self::$projects[ $post->slug ];
+		}
+		
 		$project = new Project( $post );
 		
 		if( $post->info->repository != '' )
@@ -139,20 +144,24 @@ class Mpango extends Plugin
 			{
 				$project = new GitHubProject( $post, $post->info->repository );
 				
-				// Utils::debug( $project->get_contents( 'theme.xml') );
+				$contents = $project->get_contents();
 				
-				if( $project->get_contents( 'theme.xml') )
+				foreach( $contents as $file )
 				{
-					$project = new HabariGitHubProject( $post, $post->info->repository, 'theme' );
+					if( $file->name == 'theme.xml' )
+					{
+						$project = new HabariGitHubProject( $post, $post->info->repository, 'theme' );
+					}
+					elseif( $file->name == $post->slug . '.plugin.xml' )
+					{
+						$project = new HabariGitHubProject( $post, $post->info->repository, 'plugin' );
+					}
 				}
-				elseif( $project->get_contents( $post->slug . '.plugin.xml') )
-				{
-					$project = new HabariGitHubProject( $post, $post->info->repository, 'plugin' );
-				}
-				
 								
 			}
 		}
+		
+		self::$projects[ $post->slug ] = $project;
 		
 		return $project;
 	}
@@ -357,36 +366,41 @@ class GitHubProject extends Project
 		{
 			return Cache::get( array( 'mpango_githubapi', md5( $method ) ) );
 		}
-		
+								
 		$contents = RemoteRequest::get_contents( $this->api . '/' . $method);		
-						
+									
 		if( !$contents )
-		{
+		{						
 			return false;
 		}
 		
 		$parsed = json_decode( $contents );
-		
+				
 		Cache::set( array( 'mpango_githubapi', md5( $method ) ), $parsed );
+		
+		// Cache::set( array( 'mpango_githubapi', md5( $method ) ), $parsed );
 				
 		return $parsed;
 	}
 	
-	public function get_contents( $path )
+	public function get_contents( $path = '')
 	{		
 		$path = 'repos/' . $this->user . '/' . $this->repo . '/contents/' . $path;
 		
 		$response = $this->call( $path );
-				
+						
 		if( !$response )
 		{
 			return false;
 		}
-		
-		$contents = $response->content;
-		$contents = base64_decode( $contents );
 				
-		return $contents;
+		if( !is_array( $response ) )
+		{			
+			$response = $response->content;
+			$response = base64_decode( $response );	
+		}
+						
+		return $response;
 	}
 }
 
@@ -423,7 +437,7 @@ class HabariGitHubProject extends GitHubProject
 		{
 			$xmlpath = $this->post->slug . '.plugin.xml';
 		}
-
+				
 		$this->xml = simplexml_load_string( $this->get_contents( $xmlpath ) );
 		
 		return $this->xml;
